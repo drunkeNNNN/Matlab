@@ -53,14 +53,45 @@ classdef CoordinateSystemCluster<handle
             end
         end
 
-        function h=plotCoordinateSystems(obj,target)
-            h=plot(obj.transformGraph,'EdgeLabel',obj.transformGraph.Edges.DisplayString,'NodeColor','r','Parent',target);
+        function h=plotCoordinateSystems(obj,figureHandle)
+            clf(figureHandle);
+            tg=uitabgroup(figureHandle);
+            ax1=axes(uitab(tg,"Title","Transformations"));
+            h=plot(obj.transformGraph,'EdgeLabel',obj.transformGraph.Edges.DisplayString,'NodeColor','r','Parent',ax1);
+            
+            edgeTable=dfsearch(obj.transformGraph,1,'edgetonew',Restart=true);
+            independentGraphStartPoints=unique(edgeTable(:,1));
+            independentGraphCount=size(independentGraphStartPoints,1);
+            t=uitab(tg,"Title","Unit vectors");
+            tl=tiledlayout(t,"flow");
+            for startCoSystem=independentGraphStartPoints'
+                targetCoSystems=edgeTable(edgeTable(:,1)==startCoSystem,2);
+                ax=nexttile(tl);
+                hold(ax,"on");
+                q1=quiver(0,0,1,0,'DisplayName',strcat(obj.transformGraph.Nodes{startCoSystem,1}{1,1}," x"),'Parent',ax);
+                q2=quiver(0,0,0,1,'DisplayName',strcat(obj.transformGraph.Nodes{startCoSystem,1}{1,1}," y"),'Parent',ax,'Color',get(q1,'Color'));
+                for targetCoSystem=targetCoSystems
+                    currentVectX=diff(obj.transform([0,1;0,0],...
+                                              from=obj.transformGraph.Nodes{startCoSystem,1}{1,1},...
+                                              to=obj.transformGraph.Nodes{targetCoSystem,1}{1,1}),1,2);
+                    currentVectY=diff(obj.transform([0,0;0,1],...
+                                              from=obj.transformGraph.Nodes{startCoSystem,1}{1,1},...
+                                              to=obj.transformGraph.Nodes{targetCoSystem,1}{1,1}),1,2);
+                    currentUnitVectX=currentVectX./norm(currentVectX,1);
+                    currentUnitVectY=currentVectY./norm(currentVectY,1);
+                    q1=quiver(0,0,currentUnitVectX(1,1),currentUnitVectX(2,1),'DisplayName',strcat(obj.transformGraph.Nodes{targetCoSystem,1}{1,1}," x"),'Parent',ax);
+                    q2=quiver(0,0,currentUnitVectY(1,1),currentUnitVectY(2,1),'DisplayName',strcat(obj.transformGraph.Nodes{targetCoSystem,1}{1,1}," y"),'Parent',ax,'Color',get(q1,'Color'));
+                end
+                legend(ax);
+                axis(ax,'equal','image');
+                xlim(ax,[-1,1]);
+                ylim(ax,[-1,1]);
+            end
         end
 
-        function plotLastTransformation(obj)
-            f2=figure(2);
-            clf;
-            tg=uitabgroup(f2);
+        function plotLastTransformation(obj,figureHandle)
+            clf(figureHandle);
+            tg=uitabgroup(figureHandle);
             ax1=axes(uitab(tg,'Title','Transformations'));
             h=obj.plotCoordinateSystems(ax1);
             h.highlight(obj.lastTransformSystems,'EdgeColor','green','NodeColor','green');
