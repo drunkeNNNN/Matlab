@@ -59,33 +59,39 @@ classdef CoordinateSystemCluster<handle
             ax1=axes(uitab(tg,"Title","Transformations"));
             h=plot(obj.transformGraph,'EdgeLabel',obj.transformGraph.Edges.DisplayString,'NodeColor','r','Parent',ax1);
             
-            edgeTable=dfsearch(obj.transformGraph,1,'edgetonew',Restart=true);
-            independentGraphStartPoints=unique(edgeTable(:,1));
-            independentGraphCount=size(independentGraphStartPoints,1);
+            edgeTable=conncomp(obj.transformGraph);
+            independentGraphStartPoints=unique(edgeTable);
             t=uitab(tg,"Title","Unit vectors");
             tl=tiledlayout(t,"flow");
-            for startCoSystem=independentGraphStartPoints'
-                targetCoSystems=edgeTable(edgeTable(:,1)==startCoSystem,2);
+            for startCoSystemId=independentGraphStartPoints
+                targetCoSystems=obj.transformGraph.Nodes.Name(edgeTable==startCoSystemId,1);
+                lineWidth=size(targetCoSystems,1):-1:1;
                 ax=nexttile(tl);
                 hold(ax,"on");
-                q1=quiver(0,0,1,0,'DisplayName',strcat(obj.transformGraph.Nodes{startCoSystem,1}{1,1}," x"),'Parent',ax);
-                q2=quiver(0,0,0,1,'DisplayName',strcat(obj.transformGraph.Nodes{startCoSystem,1}{1,1}," y"),'Parent',ax,'Color',get(q1,'Color'));
-                for targetCoSystem=targetCoSystems
+                q(1)=quiver(0,0,1,0,'DisplayName',targetCoSystems{1,1},'Parent',ax,'AutoScale','off');
+                text(1+0.05*randn(1),+0.05*randn(1),'x','Color',get(q(1),'Color'));
+                q2=quiver(0,0,0,1,'DisplayName','','Parent',ax,'Color',get(q(1),'Color'),'AutoScale','off');
+                text(0.05*randn(1),1-+0.05*randn(1),'y','Color',get(q(1),'Color'));
+                for i=2:size(targetCoSystems,1)
+                    targetCoSystem=targetCoSystems{i,1};
                     currentVectX=diff(obj.transform([0,1;0,0],...
-                                              from=obj.transformGraph.Nodes{startCoSystem,1}{1,1},...
-                                              to=obj.transformGraph.Nodes{targetCoSystem,1}{1,1}),1,2);
+                                              from=targetCoSystems{1,1},...
+                                              to=targetCoSystem),1,2);
                     currentVectY=diff(obj.transform([0,0;0,1],...
-                                              from=obj.transformGraph.Nodes{startCoSystem,1}{1,1},...
-                                              to=obj.transformGraph.Nodes{targetCoSystem,1}{1,1}),1,2);
+                                              from=targetCoSystems{1,1},...
+                                              to=targetCoSystem),1,2);
                     currentUnitVectX=currentVectX./norm(currentVectX,1);
                     currentUnitVectY=currentVectY./norm(currentVectY,1);
-                    q1=quiver(0,0,currentUnitVectX(1,1),currentUnitVectX(2,1),'DisplayName',strcat(obj.transformGraph.Nodes{targetCoSystem,1}{1,1}," x"),'Parent',ax);
-                    q2=quiver(0,0,currentUnitVectY(1,1),currentUnitVectY(2,1),'DisplayName',strcat(obj.transformGraph.Nodes{targetCoSystem,1}{1,1}," y"),'Parent',ax,'Color',get(q1,'Color'));
+                    offset=lineWidth(i)*0.0;
+                    q(i)=quiver(offset,offset,currentUnitVectX(1,1),currentUnitVectX(2,1),'DisplayName',targetCoSystem,'Parent',ax,'AutoScale','off');
+                    text(currentUnitVectX(1,1)+0.05*randn(1),currentUnitVectX(2,1)+0.05*randn(1),'x','Color',get(q(i),'Color'));
+                    quiver(offset,offset,currentUnitVectY(1,1),currentUnitVectY(2,1),'DisplayName','','Parent',ax,'Color',get(q(i),'Color'),'AutoScale','off');
+                    text(currentUnitVectY(1,1)+0.05*randn(1),currentUnitVectY(2,1)+0.05*randn(1),'y','Color',get(q(i),'Color'));
                 end
-                legend(ax);
+                legend(ax,q);
                 axis(ax,'equal','image');
-                xlim(ax,[-1,1]);
-                ylim(ax,[-1,1]);
+                xlim(ax,[-1.2,1.2]);
+                ylim(ax,[-1.2,1.2]);
             end
         end
 
