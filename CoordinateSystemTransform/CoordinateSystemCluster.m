@@ -1,6 +1,7 @@
 classdef CoordinateSystemCluster<handle
     properties(Access=private)
         transformGraph;
+        registeredPoints;
 
         lastTransformSystems;
         lastTransformedPoints;
@@ -8,11 +9,36 @@ classdef CoordinateSystemCluster<handle
     end
 
     methods(Access=public)
-        function clear(obj)
+        function obj=clear(obj)
             obj.transformGraph=digraph();
+            obj.registeredPoints=containers.Map();
         end
 
-        function addTransform(obj,transform)
+        function registerPoints(obj,points,pointTag,systemTag)
+            arguments
+                obj
+                points
+                pointTag (1,1) string
+                systemTag.in (1,1) string
+            end
+            pointStruct.points=points;
+            pointStruct.systemTag=systemTag.in;
+            if obj.coSystemIsDefined(systemTag.in)
+                obj.registeredPoints(pointTag)=pointStruct;
+            else
+                error(strcat("Coordinate system ",systemTag.in," is not defined."));
+            end
+        end
+
+        function pointTable=getRegisteredPoints(obj)
+            pointTag=convertCharsToStrings(obj.registeredPoints.keys');
+            systemTag=cellfun(@(x)(x.systemTag),obj.registeredPoints.values)';
+
+            points=cellfun(@(x)(x.points),obj.registeredPoints.values,'UniformOutput',false)';
+            pointTable=table(pointTag,systemTag,points);
+        end
+
+        function obj=addTransform(obj,transform)
             arguments
                 obj
                 transform CoordinateSystemTransform
@@ -37,20 +63,47 @@ classdef CoordinateSystemCluster<handle
                 }));
         end
 
+        function transformedPoints=get(obj,pointTag,systemTag)
+            arguments
+                obj
+                pointTag
+                systemTag.in (1,1) string
+            end
+            transformedPoints=obj.transform(obj.registeredPoints(pointTag).points,...
+                                            from=obj.registeredPoints(pointTag).systemTag,...
+                                            to=systemTag.in);
+        end
+
         function transformedPoints=transform(obj,points,systemTags)
             arguments
                 obj 
                 points
                 systemTags.from (1,1) string
                 systemTags.to (1,1) string
+                systemTags.via (1,1) string=""
             end
-            if iscell(points)
-                transformedPoints=cellfun(@(x)obj.transformVector(x,'from',systemTags.from,'to',systemTags.to),points,'UniformOutput',false);
-            elseif isnumeric(points)
-                transformedPoints=obj.transformVector(points,'from',systemTags.from,'to',systemTags.to);
+            if strlength(systemTags.via)>0
+                transformedPointsVia=obj.transform(points,...
+                                                   from=systemTags.from,...
+                                                   to=systemTags.via);
+                transformedPoints=obj.transform(transformedPointsVia,...
+                                                from=systemTags.via,...
+                                                to=systemTags.to);
+            elseif systemTags.from==systemTags.to
+                transformedPoints=points;
             else
-                error('Invalid input. Input must be a (2,:) numeric vector or a cell array of such vectors.');
+                if iscell(points)
+                    transformedPoints=cellfun(@(x)obj.transformVector(x,'from',systemTags.from,'to',systemTags.to),points,'UniformOutput',false);
+                elseif isnumeric(points)
+                    transformedPoints=obj.transformVector(points,'from',systemTags.from,'to',systemTags.to);
+                else
+                    error('Invalid input. Input must be a (2,:) numeric vector or a cell array of such vectors.');
+                end
             end
+        end
+
+        function defined=coSystemIsDefined(obj,systemTag)
+            defined=any(contains(obj.transformGraph.Nodes.Name,systemTag));
         end
 
         function h=plotCoordinateSystems(obj,figureHandle)
@@ -142,15 +195,16 @@ classdef CoordinateSystemCluster<handle
             end
         end
 
-        function unitCellSize=getUnitCellSizeAt(obj,coordinates,systemTags)
+        function unitCellSize=getScaleAt(obj,coordinates,systemTags)
             arguments
                 obj
                 coordinates
                 systemTags.of 
                 systemTags.in
             end
-            warning('Output is different than what is expected for rotated co-systems')
-            unitCellSize=obj.getDisplacementBetween(coordinates-0.5,coordinates+0.5,of=systemTags.of,in=systemTags.in);
+            warning('Output is different than what is expected for rotated co-systems');
+            STEP=1E-9;
+            unitCellSize=1./STEP*obj.getDisplacementBetween(coordinates-STEP/2,coordinates+STEP/2,of=systemTags.of,in=systemTags.in);
         end
     end
 

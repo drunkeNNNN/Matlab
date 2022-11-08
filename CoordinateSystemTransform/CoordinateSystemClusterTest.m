@@ -13,8 +13,8 @@ classdef CoordinateSystemClusterTest < matlab.unittest.TestCase
         function setup(obj)
             obj.csc=CoordinateSystemCluster();
             obj.csc.clear();
-            obj.t2=Translation("System2","System3",[10;-10]);
-            obj.t1=Rotation("System1","System2",20);
+            obj.t2=AffineTForm("System2","System3").setTranslation([10;-10]);
+            obj.t1=AffineTForm("System1","System2").setRotationAngle(20);
             obj.csc.addTransform(obj.t1);
             obj.csc.addTransform(obj.t2);
             [X,Y]=meshgrid(-3:3,-3:3);
@@ -27,9 +27,9 @@ classdef CoordinateSystemClusterTest < matlab.unittest.TestCase
     end
     
     methods(Test)
-        function shouldGetCorrectUnitCellSize(obj)
-            unitCellSize=obj.csc.getUnitCellSizeAt(obj.startPoints,of="System2",in="System3");
-            obj.verifyEqual(unitCellSize,ones(size(unitCellSize)),'RelTol',1E-12);
+        function shouldGetCorrecScale(obj)
+            unitCellSize=obj.csc.getScaleAt(obj.startPoints,of="System2",in="System3");
+            obj.verifyEqual(unitCellSize,ones(size(unitCellSize)),'RelTol',1E-7);
         end
 
         function shouldMeasureDisplacement(obj)
@@ -57,9 +57,8 @@ classdef CoordinateSystemClusterTest < matlab.unittest.TestCase
         end
 
         function shouldTransformBackward(obj)
-            transformedForward=obj.csc.transform(obj.startPoints,from="System1",to="System3");
-            regainedStartPoints=obj.csc.transform(transformedForward,from="System3",to="System1");
-            obj.verifyEqual(obj.startPoints,regainedStartPoints,AbsTol=1E-10);
+            regainedStartPoints=obj.csc.transform(obj.startPoints,from="System1",via="System3",to="System1");
+            obj.verifyEqual(obj.startPoints,regainedStartPoints,AbsTol=1E-12);
         end
     end
 end
