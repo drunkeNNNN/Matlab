@@ -38,7 +38,7 @@ classdef CoordinateSystemCluster<handle
             pointTable=table(pointTag,systemTag,points);
         end
 
-        function obj=addTransform(obj,transform)
+        function obj=addTransform1to2(obj,transform)
             arguments
                 obj
                 transform CoordinateSystemTransform
@@ -46,14 +46,33 @@ classdef CoordinateSystemCluster<handle
             obj.transformGraph=obj.transformGraph.addedge(table(...
                 [...
                     transform.getSystem1Tag(),transform.getSystem2Tag();...
-                    transform.getSystem2Tag(),transform.getSystem1Tag()...
                 ],...
                 {...
                     @transform.transform1To2;...
-                    @transform.transform2To1...
                 },...
                 {...
                     transform.getDisplayString1To2();...
+                },'VariableNames',...
+                {...
+                    'EndNodes',...
+                    'TransformFunction',...
+                    'DisplayString'...
+                }));
+        end
+
+        function obj=addTransform2to1(obj,transform)
+            arguments
+                obj
+                transform CoordinateSystemTransform
+            end
+            obj.transformGraph=obj.transformGraph.addedge(table(...
+                [...
+                    transform.getSystem2Tag(),transform.getSystem1Tag()...
+                ],...
+                {...
+                    @transform.transform2To1...
+                },...
+                {...
                     transform.getDisplayString2To1()...
                 },'VariableNames',...
                 {...
@@ -61,6 +80,19 @@ classdef CoordinateSystemCluster<handle
                     'TransformFunction',...
                     'DisplayString'...
                 }));
+        end
+
+        function obj=addTransform(obj,transform)
+            arguments
+                obj
+                transform CoordinateSystemTransform
+            end
+            if transform.isValid1to2()
+                obj.addTransform1to2(transform);
+            end
+            if transform.isValid2to1()
+                obj.addTransform2to1(transform);
+            end
         end
 
         function transformedPoints=get(obj,pointTag,systemTag)
@@ -106,40 +138,44 @@ classdef CoordinateSystemCluster<handle
             defined=any(contains(obj.transformGraph.Nodes.Name,systemTag));
         end
 
-        function h=plotCoordinateSystems(obj,figureHandle)
+        function h=plotCoordinateSystems(obj,figureHandle,startCoSystems)
             clf(figureHandle);
             tg=uitabgroup(figureHandle);
             ax1=axes(uitab(tg,"Title","Transformations"));
             h=plot(obj.transformGraph,'EdgeLabel',obj.transformGraph.Edges.DisplayString,'NodeColor','r','Parent',ax1);
             
-            edgeTable=conncomp(obj.transformGraph);
-            independentGraphStartPoints=unique(edgeTable);
+            
+            colors=hsv(size(obj.transformGraph.Nodes.Name,1));
             t=uitab(tg,"Title","Unit vectors");
             tl=tiledlayout(t,"flow");
-            for startCoSystemId=independentGraphStartPoints
-                targetCoSystems=obj.transformGraph.Nodes.Name(edgeTable==startCoSystemId,1);
+            for startCoSystemId=1:size(startCoSystems,2)
+                currentStartCoSystemId=find(cellfun(@(x)(x==startCoSystems{1,startCoSystemId}),obj.transformGraph.Nodes.Name));
+                currentTargetCoSystemIds=obj.transformGraph.dfsearch(currentStartCoSystemId,'edgetonew','Restart',false);
+                currentTargetCoSystemIds=currentTargetCoSystemIds(:,2);
+                targetCoSystems=obj.transformGraph.Nodes.Name(currentTargetCoSystemIds);
                 lineWidth=size(targetCoSystems,1):-1:1;
                 ax=nexttile(tl);
                 hold(ax,"on");
-                q(1)=quiver(0,0,1,0,'DisplayName',targetCoSystems{1,1},'Parent',ax,'AutoScale','off');
-                text(1+0.05*randn(1),+0.05*randn(1),'x','Color',get(q(1),'Color'));
-                q2=quiver(0,0,0,1,'DisplayName','','Parent',ax,'Color',get(q(1),'Color'),'AutoScale','off');
-                text(0.05*randn(1),1-+0.05*randn(1),'y','Color',get(q(1),'Color'));
-                for i=2:size(targetCoSystems,1)
+                q=quiver(0,0,1,0,'DisplayName',startCoSystems{1,startCoSystemId},'Parent',ax,'AutoScale','off','Color',colors(currentStartCoSystemId,:));
+                text(1+0.05*randn(1),+0.05*randn(1),'x','Color',colors(currentStartCoSystemId,:));
+                quiver(0,0,0,1,'DisplayName','','Parent',ax,'Color',colors(currentStartCoSystemId,:),'AutoScale','off');
+                text(0.05*randn(1),1-+0.05*randn(1),'y','Color',colors(currentStartCoSystemId,:));
+                for i=1:size(targetCoSystems,1)
+                    STEP=1E-6;
                     targetCoSystem=targetCoSystems{i,1};
-                    currentVectX=diff(obj.transform([0,1;0,0],...
-                                              from=targetCoSystems{1,1},...
+                    currentVectX=diff(obj.transform([0,STEP;0,0],...
+                                              from=startCoSystems{1,startCoSystemId},...
                                               to=targetCoSystem),1,2);
-                    currentVectY=diff(obj.transform([0,0;0,1],...
-                                              from=targetCoSystems{1,1},...
+                    currentVectY=diff(obj.transform([0,0;0,STEP],...
+                                              from=startCoSystems{1,startCoSystemId},...
                                               to=targetCoSystem),1,2);
-                    currentUnitVectX=currentVectX./norm(currentVectX,1);
-                    currentUnitVectY=currentVectY./norm(currentVectY,1);
+                    currentUnitVectX=currentVectX./norm(currentVectX,2);
+                    currentUnitVectY=currentVectY./norm(currentVectY,2);
                     offset=lineWidth(i)*0.0;
-                    q(i)=quiver(offset,offset,currentUnitVectX(1,1),currentUnitVectX(2,1),'DisplayName',targetCoSystem,'Parent',ax,'AutoScale','off');
-                    text(currentUnitVectX(1,1)+0.05*randn(1),currentUnitVectX(2,1)+0.05*randn(1),'x','Color',get(q(i),'Color'));
-                    quiver(offset,offset,currentUnitVectY(1,1),currentUnitVectY(2,1),'DisplayName','','Parent',ax,'Color',get(q(i),'Color'),'AutoScale','off');
-                    text(currentUnitVectY(1,1)+0.05*randn(1),currentUnitVectY(2,1)+0.05*randn(1),'y','Color',get(q(i),'Color'));
+                    q(i+1)=quiver(offset,offset,currentUnitVectX(1,1),currentUnitVectX(2,1),'DisplayName',targetCoSystem,'Parent',ax,'AutoScale','off','Color',colors(currentTargetCoSystemIds(i),:));
+                    text(currentUnitVectX(1,1)+0.07*randn(1),currentUnitVectX(2,1)+0.05*randn(1),'x','Color',colors(currentTargetCoSystemIds(i),:));
+                    quiver(offset,offset,currentUnitVectY(1,1),currentUnitVectY(2,1),'DisplayName','','Parent',ax,'Color',colors(currentTargetCoSystemIds(i),:),'AutoScale','off');
+                    text(currentUnitVectY(1,1)+0.07*randn(1),currentUnitVectY(2,1)+0.05*randn(1),'y','Color',colors(currentTargetCoSystemIds(i),:));
                 end
                 legend(ax,q);
                 axis(ax,'equal','image');
